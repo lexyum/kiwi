@@ -2,10 +2,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <locale.h>
+#include <poll.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
+
+#include "pty.h"
+#include "term.h"
 
 const char program_name[] = "temu";
 const char fontname[] = "fixed";
@@ -118,26 +123,49 @@ int main(int argc, char *argv[])
 	/*
 	 * TODO: argument processing! Need proper spec.
 	 */
-	
-	 char *locale = setlocale(LC_CTYPE, "");
-	 if (!XSupportsLocale()) {
-		 fprintf(stderr, "%s: locale %s not supported, using default\n", program_name, locale);
-		 setlocale(LC_CTYPE, "C");
-	 }
+	int pty_fd;
+	char *locale = setlocale(LC_CTYPE, "");
+	if (!XSupportsLocale()) {
+		fprintf(stderr, "%s: locale %s not supported, using default\n", program_name, locale);
+		setlocale(LC_CTYPE, "C");
+	}
 	 
 	XSetLocaleModifiers("");
-	
-	window_init(); // configure and open terminal window
-	
+
+
+	window_init();       	// configure and open terminal window
+	if ((pty_fd = pty_init(NULL, NULL)) == -1) {
+		XDestroyWindow(client.display, client.win);
+		destroy(NULL);
+	}
+
 	/* main X11 event loop - poll for XEvent and call handler. */
 	
 	while (1) {
-		XEvent ev;
-		XNextEvent(client.display, &ev);
-		if (handler[ev.type]) {
-			handler[ev.type](&ev);
-			continue;
+		struct pollfd fds = { .fd = pty_fd, .events = POLLIN };
+
+		if (poll(&fds, 1, 0) == -1) {
+			if (errno = EINTR)
+				continue;
+			else {
+				perror("poll");
+				exit(EXIT_FAILURE);
+			}
 		}
+
+		if (fds.revents & POLLIN)
+			pty_read();
+
+
+		while (XPending(client.display)) {
+			XEvent ev;
+			XNextEvent(client.display, &ev);
+			if (handler[ev.type]) {
+				handler[ev.type](&ev);
+			}
+		}
+
+		XFlush(client.display);
 	}
 }
 
@@ -147,6 +175,7 @@ static void expose(XEvent *ev)
 
 static void destroy(XEvent *ev)
 {
+	term_free();
 	XFreeFont(client.display, client.font_info);
 	XFreeGC(client.display, client.gc);
 	XCloseDisplay(client.display);
@@ -160,45 +189,28 @@ static void configure(XEvent *ev)
 
 	client.width = ev->xconfigure.width;
 	client.height = ev->xconfigure.height;
+
+	/* resize terminal */
+	int cheight, cwidth;
+	int rows, cols;
+
+	cheight = client.font_info->max_bounds.ascent + client.font_info->max_bounds.descent;
+	cwidth = client.font_info->max_bounds.width;
+	rows = client.height/cheight;
+	cols = client.width/cwidth;
+
+	term_resize(rows, cols);
 }
 
 static void keypress(XEvent *ev)
 {
 	KeySym key;
-	char buf[64];
+	char buf[8];
 	int len;
 
 	len = XLookupString(&ev->xkey, buf, 64, &key, NULL);
 
-	static int x = 10;
-	static int y = 10;
-
 	if (len == 0)
 		return;
-	else if (buf[0] < 0x20) {
-		buf[1] = buf[0] + '@';
-		buf[0] = '^';
-
-		XDrawString(client.display, client.win, client.gc,
-			    x, y, buf, 2);
-		x += XTextWidth(client.font_info, buf, 2);
-	}
-	else if (buf[0] == 0x7f) {
-		buf[1] = '?';
-		buf[0] = '^';
-
-		XDrawString(client.display, client.win, client.gc,
-			    x, y, buf, 2);
-		x += XTextWidth(client.font_info, buf, 2);
-	}
-	else {
-		XDrawString(client.display, client.win, client.gc,
-			    x, y, buf, 1);
-		x += XTextWidth(client.font_info, buf, 1);
-	}
-
-	if (x >= client.width - client.font_info->max_bounds.width) {
-		x = 5;
-		y += client.font_info->ascent;
-	}
+	pty_write(buf, len);
 }
