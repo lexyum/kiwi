@@ -1,5 +1,9 @@
-a.out
-*~
-*.o
 NOTES.md
 README.md
+temu
+# emacs backups
+*~
+
+# object and dependency files
+*.o
+*.d
