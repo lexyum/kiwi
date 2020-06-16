@@ -30,7 +30,7 @@ static struct {
 	int height;
 } client;
 
-/* KEvent table */
+/* XEvent table */
 static void configure(XEvent *);
 static void destroy(XEvent *);
 static void expose(XEvent *);
@@ -124,6 +124,7 @@ int main(int argc, char *argv[])
 	 * TODO: argument processing! Need proper spec.
 	 */
 	int pty_fd;
+	XEvent ev;
 	char *locale = setlocale(LC_CTYPE, "");
 	if (!XSupportsLocale()) {
 		fprintf(stderr, "%s: locale %s not supported, using default\n", program_name, locale);
@@ -139,11 +140,29 @@ int main(int argc, char *argv[])
 		destroy(NULL);
 	}
 
+	do {
+		XNextEvent(client.display, &ev);
+
+		if (ev.type == ConfigureNotify)
+			configure(&ev);
+	} while (ev.type != MapNotify);
+			
+	
+
 	/* main X11 event loop - poll for XEvent and call handler. */
 	
 	while (1) {
 		struct pollfd fds = { .fd = pty_fd, .events = POLLIN };
 
+		/*
+		 * This works for now, but is really not the best way to run
+		 * - polling with timeout 0 is necessary to ensure we don't 
+		 *   miss XEvents, but means a continuous stream of syscalls
+		 *   when idling.
+		 *
+		 * TODO: come up with a way to 'sleep' when nothing is happening,
+		 *       without affecting long-running commands.
+		 */
 		if (poll(&fds, 1, 0) == -1) {
 			if (errno = EINTR)
 				continue;
@@ -158,7 +177,6 @@ int main(int argc, char *argv[])
 
 
 		while (XPending(client.display)) {
-			XEvent ev;
 			XNextEvent(client.display, &ev);
 			if (handler[ev.type]) {
 				handler[ev.type](&ev);
@@ -196,10 +214,13 @@ static void configure(XEvent *ev)
 
 	cheight = client.font_info->max_bounds.ascent + client.font_info->max_bounds.descent;
 	cwidth = client.font_info->max_bounds.width;
+
 	rows = client.height/cheight;
 	cols = client.width/cwidth;
 
-	term_resize(rows, cols);
+	/* Don't resize if window is not mapped */
+	if (rows && cols)
+		term_resize(rows, cols);
 }
 
 static void keypress(XEvent *ev)
