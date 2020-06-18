@@ -15,8 +15,12 @@
 const char program_name[] = "temu";
 const char fontname[] = "fixed";
 
+/* initial terminal dimensions */
 const unsigned int cols = 80;
 const unsigned int rows = 24;
+
+/* input polling timeout */
+const int timeout = 30;
 
 /* program window and global X information */
 static struct {
@@ -95,7 +99,7 @@ void window_init(void)
 
 	client.win = XCreateWindow(client.display, client.root,
 				   0, 0,
-				   client.width, client.height, 0,
+				   client.width, client.height, 5,
 				   CopyFromParent,
 				   InputOutput,
 				   CopyFromParent,
@@ -116,6 +120,35 @@ void window_init(void)
 
 	/* is this necessary? */
 	XSync(client.display, False);
+}
+
+void xdraw_char(char c, int col, int row)
+{
+	int cw, ch, x, y;
+	cw = client.font_info->max_bounds.width;
+	ch =  client.font_info->max_bounds.ascent
+		+ client.font_info->max_bounds.descent;
+
+	// drawing origin such thattop-left bounding box of first character at (0, 0)
+	y = client.font_info->max_bounds.ascent + (row * ch);
+	x = (col * cw);
+
+	XDrawString(client.display, client.win, client.gc, x, y, &c, 1);
+}
+
+void xdelete_char(int col, int row)
+{
+	int cw, ch, x1, y1;
+	cw = client.font_info->max_bounds.width;
+	ch = client.font_info->max_bounds.ascent
+		+ client.font_info->max_bounds.descent;
+
+	// origin of char bounding box, not drawing origin
+	y1 = row * ch;
+	x1 = client.font_info->min_bounds.lbearing + col * cw;
+
+	XClearArea(client.display, client.win, x1, y1, cw, ch, False);
+	XFlush(client.display);
 }
 
 int main(int argc, char *argv[])
@@ -146,8 +179,6 @@ int main(int argc, char *argv[])
 		if (ev.type == ConfigureNotify)
 			configure(&ev);
 	} while (ev.type != MapNotify);
-			
-	
 
 	/* main X11 event loop - poll for XEvent and call handler. */
 	
@@ -163,7 +194,7 @@ int main(int argc, char *argv[])
 		 * TODO: come up with a way to 'sleep' when nothing is happening,
 		 *       without affecting long-running commands.
 		 */
-		if (poll(&fds, 1, 0) == -1) {
+		if (poll(&fds, 1, timeout) == -1) {
 			if (errno = EINTR)
 				continue;
 			else {
@@ -183,7 +214,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		XFlush(client.display);
+		//		XFlush(client.display);
 	}
 }
 
@@ -221,6 +252,7 @@ static void configure(XEvent *ev)
 	/* Don't resize if window is not mapped */
 	if (rows && cols)
 		term_resize(rows, cols);
+
 }
 
 static void keypress(XEvent *ev)
@@ -233,5 +265,6 @@ static void keypress(XEvent *ev)
 
 	if (len == 0)
 		return;
+
 	pty_write(buf, len);
 }
