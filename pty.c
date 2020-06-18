@@ -9,6 +9,8 @@
 #include <sys/wait.h>
 #include <poll.h>
 
+#include "term.h"
+
 static int pty_fd;
 static pid_t slave_pid;
 
@@ -36,9 +38,9 @@ void sigchld(int sig)
 	exit(EXIT_SUCCESS);
 }		
 
+
 int pty_init(char *cmd, char *argv[])
 {
-
 	switch(slave_pid = forkpty(&pty_fd, NULL, NULL, NULL)) {
 	case -1 : // error, let main() handle it
 		close(pty_fd);
@@ -57,24 +59,40 @@ int pty_init(char *cmd, char *argv[])
 void pty_read(void)
 {
 	static char buf[BUFSIZ];
-	static size_t used = 0;
 	ssize_t nread;
 
-	switch (nread = read(pty_fd, buf, BUFSIZ - used)) {
+	switch (nread = read(pty_fd, buf, BUFSIZ)) {
 	case -1 :
 		perror("pty_read");
 		exit(EXIT_FAILURE);
 	case 0 :
 		return;
 	default :
-		used += nread;
-		used -= write(STDOUT_FILENO, buf, used);
+		for (int i = 0; i < nread; ++i) {
+			switch(buf[i]) {
+			case '\t' :
+				htab();
+				break;
+			case '\b' :
+				backspace();
+				break;
+			case '\n' :
+				linefeed();
+				break;
+			case '\r' :
+				carreturn();
+				break;
+			default :
+				insert_char(buf[i]);
+			}
+			
+		}
 	}
 }
-	
+
 void pty_write(char *buf, size_t count)
 {
-	ssize_t r;
+	ssize_t nwritten;
 	struct pollfd fds = { .fd = pty_fd, .events = POLLOUT };
 
 	/*
@@ -94,13 +112,14 @@ void pty_write(char *buf, size_t count)
 			}
 		}
 		if (fds.revents & POLLOUT) {
-			if ((r = write(pty_fd, buf, count)) == -1) {
+			if ((nwritten = write(pty_fd, buf, count)) == -1) {
 				perror("write");
 				exit(EXIT_FAILURE);
 			}
-			count -= r;
-			buf += r;
-			
+			count -= nwritten;
+			buf += nwritten;
+
+			// clear return buffer
 			if (count)
 				pty_read();
 		}

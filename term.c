@@ -4,6 +4,9 @@
 #include <unistd.h>
 
 #include "term.h"
+
+void xdraw_char(char, int, int);
+void xdelete_char(int, int);
 /*
  * TODO: Currently we store the physical screen and alternate screen together
 n *       and update both when the window size changes. Maybe better to 
@@ -119,4 +122,70 @@ void term_free(void)
 
 	free(term.alt);
 	free(term.screen);
+}
+
+void insert_char(char c)
+{
+	xdraw_char(c, term.xcur, term.ycur);
+	term.screen[term.ycur][term.xcur++] = c;
+	
+	if (term.xcur == term.cols) {
+		++term.ycur;
+		term.xcur = 0;
+	}
+}
+
+void delete_char(void)
+{
+	if (term.xcur == 0) {
+		--term.ycur;
+		term.xcur = term.cols;
+	}
+	term.screen[term.ycur][--term.xcur] = 0;
+	xdelete_char(term.xcur, term.ycur);
+}
+
+void newline(void)
+{
+	++term.ycur;
+	term.xcur = 0;
+}
+
+void linefeed(void)
+{
+	++term.ycur;
+}
+
+void carreturn(void)
+{
+	term.xcur = 0;
+}
+
+void backspace(void)
+{
+	if (term.xcur == 0) {
+		term.xcur = term.cols - 1;
+		--term.ycur;
+	}
+	else {
+		--term.xcur;
+	}
+}
+
+void moveto(int x, int y)
+{
+	if (x >= term.cols)
+		term.xcur = term.cols - 1;
+	else
+		term.xcur = x;
+
+	if (y >= term.rows)
+		term.ycur = term.rows - 1;
+	else
+		term.ycur = y;
+}
+
+void htab(void)
+{
+	moveto(term.xcur + 4, term.ycur);
 }
