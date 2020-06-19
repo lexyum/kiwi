@@ -5,8 +5,11 @@
 
 #include "term.h"
 
+const int tabspaces = 8;
+
 void xdraw_char(char, int, int);
 void xdelete_char(int, int);
+
 /*
  * TODO: Currently we store the physical screen and alternate screen together
 n *       and update both when the window size changes. Maybe better to 
@@ -18,8 +21,9 @@ static struct {
 	int cols;
 	int xcur;
 	int ycur;
-	glyph_t **screen;
-	glyph_t **alt;
+	glyph_t **screen; // current screen
+	glyph_t **alt;    // alternate screen
+	int *tabs;        // tab stops
 } term;
 
 /* Return-tested dynamic memory allocation. Use library prototypes */
@@ -75,6 +79,7 @@ void term_resize(int rows, int cols)
 
 	term.screen = realloc_test(term.screen, rows * sizeof(*term.screen));
 	term.alt    = realloc_test(term.alt, rows * sizeof(*term.alt));
+	term.tabs   = realloc_test(term.tabs, cols * sizeof(*term.tabs));
 
 	// Insert line breaks for cursor if needed by shifting screen 
 	while (term.xcur >= cols) {
@@ -87,7 +92,7 @@ void term_resize(int rows, int cols)
 		
 		term.xcur -= cols;
 		
-		memset(term.screen[term.ycur] + term.xcur, ' ',
+		memset(term.screen[term.ycur] + term.xcur, 0,
 		       (term.cols - term.xcur) * sizeof(**term.screen));
 	}
 		
@@ -96,8 +101,8 @@ void term_resize(int rows, int cols)
 		term.screen[i] = realloc_test(term.screen[i], cols * sizeof(*term.screen[i]));
 		term.alt[i]    = realloc_test(term.alt[i], cols * sizeof(*term.alt[i]));
 		if (cols > term.cols) {
-			memset(term.screen[i], ' ', (cols - term.cols) * sizeof(*term.screen[i]));
-			memset(term.alt[i], ' ', (cols - term.cols) * sizeof(*term.screen[i]));
+			memset(term.screen[i] + term.cols, 0, (cols - term.cols) * sizeof(*term.screen[i]));
+			memset(term.alt[i] + term.cols, 0, (cols - term.cols) * sizeof(*term.screen[i]));
 		}
 
 	}
@@ -107,7 +112,18 @@ void term_resize(int rows, int cols)
 		term.screen[i] = calloc_test(cols, sizeof(*term.screen[i]));
 		term.alt[i] = calloc_test(cols, sizeof(*term.screen[i]));
 	}
+	
+	if (cols > term.cols) {
+		int *tstop = term.tabs + term.cols;
+		memset(tstop, 0, (cols - term.cols) * sizeof(*term.tabs));
+		/* extend tab stops if necessary */
+		while (*tstop != 1 && tstop != term.tabs)
+			--tstop;
+		for (tstop += tabspaces; tstop < term.tabs + cols;  tstop += tabspaces)
+			*tstop = 1;
+	}
 
+		
 	// all done
 	term.cols = cols;
 	term.rows = rows;
@@ -124,6 +140,18 @@ void term_free(void)
 	free(term.screen);
 }
 
+void redraw(void)
+{
+	for (int i = 0; i < term.rows; ++i) {
+		for (int j = 0; j < term.cols; ++j) {
+			if (term.screen[i][j])
+				xdraw_char(term.screen[i][j], j, i);
+			else
+				break;
+		}
+	}
+}
+		   
 void insert_char(char c)
 {
 	xdraw_char(c, term.xcur, term.ycur);
@@ -187,5 +215,12 @@ void moveto(int x, int y)
 
 void htab(void)
 {
-	moveto(term.xcur + 4, term.ycur);
+	while(term.xcur < term.cols && !term.tabs[term.xcur])
+		++term.xcur;
+
+	if (term.xcur == term.cols) {
+		term.xcur = 0;
+		++term.ycur;
+	}
 }
+

@@ -68,19 +68,30 @@ void pty_read(void)
 	case 0 :
 		return;
 	default :
+		/* Control handling */
 		for (int i = 0; i < nread; ++i) {
 			switch(buf[i]) {
-			case '\t' :
-				htab();
+			case '\0' : // Null (do nothing)
 				break;
-			case '\b' :
+			case '\a' : // Bell (NOT IMPLEMENTED)
+				break;
+			case '\b' : // Backspace
 				backspace();
 				break;
-			case '\n' :
+			case '\f' : // Formfeed (NOT IMPLEMENTED)
+				break;
+			case '\t' : // Horizontal tab
+				htab();
+				break;
+			case '\n' : // Line feed
 				linefeed();
 				break;
-			case '\r' :
+			case '\v' : // Vertical tab (NOT IMPLEMENTED)
+				break;
+			case '\r' : // Carriage return
 				carreturn();
+				break;
+			case 0x1b : // ESC (NEEDS TO BE IMPLEMENTED!)
 				break;
 			default :
 				insert_char(buf[i]);

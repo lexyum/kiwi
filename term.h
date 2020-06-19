@@ -15,5 +15,9 @@ void newline(void);
 void linefeed(void);
 void carreturn(void);
 void htab(void);
+void backspace(void);
+
+/* redisplay */
+void redraw(void);
 
 #endif /* TEMU_TERM_H */

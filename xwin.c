@@ -95,7 +95,7 @@ void window_init(void)
 	set_attr = (XSetWindowAttributes)
 		{ .background_pixel = BlackPixel(client.display, client.screen),
 		  .border_pixel     = BlackPixel(client.display, client.screen),
-		  .event_mask       = StructureNotifyMask | KeyPressMask };
+		  .event_mask       = StructureNotifyMask | KeyPressMask | ExposureMask};
 
 	client.win = XCreateWindow(client.display, client.root,
 				   0, 0,
@@ -220,6 +220,9 @@ int main(int argc, char *argv[])
 
 static void expose(XEvent *ev)
 {
+	XClearWindow(client.display, client.win);
+	redraw();
+	XFlush(client.display);
 }
 
 static void destroy(XEvent *ev)
@@ -252,7 +255,6 @@ static void configure(XEvent *ev)
 	/* Don't resize if window is not mapped */
 	if (rows && cols)
 		term_resize(rows, cols);
-
 }
 
 static void keypress(XEvent *ev)
