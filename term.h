@@ -4,11 +4,11 @@
 typedef char glyph_t;
 
 /* memory handling */
-void term_resize(int rows, int cols);
+void term_resize(int, int);
 void term_free();
 
 /* basic editing */
-void insert_char(char c);
+void insert_char(char);
 void delete_char(void);
 void moveto(int, int);
 void newline(void);
@@ -19,5 +19,6 @@ void backspace(void);
 
 /* redisplay */
 void redraw(void);
+void scrolldown(int);
 
 #endif /* TEMU_TERM_H */

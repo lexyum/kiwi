@@ -80,9 +80,9 @@ void window_init(void)
 		fputs("error: cannot connect to X server", stderr);
 		exit(EXIT_FAILURE);
 	}
-
-	font_init(); 
-
+	
+	font_init();
+	
 	// populate xclient
 	client.screen = DefaultScreen(client.display);
 	client.root = RootWindow(client.display, client.screen);
@@ -115,7 +115,7 @@ void window_init(void)
 
 	client.gc = XCreateGC(client.display, client.win, gcmask, &gcvalues);
 	
-	
+
 	XMapWindow(client.display, client.win);
 
 	/* is this necessary? */
@@ -148,7 +148,6 @@ void xdelete_char(int col, int row)
 	x1 = client.font_info->min_bounds.lbearing + col * cw;
 
 	XClearArea(client.display, client.win, x1, y1, cw, ch, False);
-	XFlush(client.display);
 }
 
 int main(int argc, char *argv[])
@@ -163,11 +162,11 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s: locale %s not supported, using default\n", program_name, locale);
 		setlocale(LC_CTYPE, "C");
 	}
-	 
 	XSetLocaleModifiers("");
 
-
 	window_init();       	// configure and open terminal window
+
+
 	if ((pty_fd = pty_init(NULL, NULL)) == -1) {
 		XDestroyWindow(client.display, client.win);
 		destroy(NULL);
@@ -214,7 +213,6 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		//		XFlush(client.display);
 	}
 }
 
@@ -222,7 +220,6 @@ static void expose(XEvent *ev)
 {
 	XClearWindow(client.display, client.win);
 	redraw();
-	XFlush(client.display);
 }
 
 static void destroy(XEvent *ev)
@@ -234,6 +231,12 @@ static void destroy(XEvent *ev)
 	exit(EXIT_SUCCESS);
 }
 
+/*
+ * This works, but we get ugly flickering when a window is resized by 
+ * dragging the corner.
+ *
+ * TODO: Fix this! Be more intelligent about resizing and redisplay
+ */
 static void configure(XEvent *ev)
 {
 	if (ev->xconfigure.width == client.width && ev->xconfigure.height == client.height)
@@ -263,10 +266,15 @@ static void keypress(XEvent *ev)
 	char buf[8];
 	int len;
 
-	len = XLookupString(&ev->xkey, buf, 64, &key, NULL);
+	len = XLookupString(&ev->xkey, buf, 8, &key, NULL);
 
 	if (len == 0)
 		return;
 
 	pty_write(buf, len);
+}
+
+void xclear(void)
+{
+	XClearWindow(client.display, client.win);
 }

@@ -7,6 +7,7 @@
 
 const int tabspaces = 8;
 
+void xclear(void);
 void xdraw_char(char, int, int);
 void xdelete_char(int, int);
 
@@ -62,14 +63,14 @@ void term_resize(int rows, int cols)
 {
 	int i;
 	// shift screen to adjust cursor vertical position
-	for (i = 0; i <= term.ycur - cols; ++i) {
+	for (i = 0; i <= term.ycur - rows; ++i) {
 		free(term.screen[i]);
 		free(term.alt[i]);
 	}
 	if (i > 0) {
 		memmove(term.screen, term.screen + i, rows * sizeof(*term.screen));
 		memmove(term.alt, term.alt + i, rows * sizeof(*term.alt));
-		term.ycur = cols - 1;
+		term.ycur = rows - 1;
 	}
 	// correct number of rows
 	for (i += rows; i < term.rows; ++i) {
@@ -142,6 +143,7 @@ void term_free(void)
 
 void redraw(void)
 {
+	xclear();
 	for (int i = 0; i < term.rows; ++i) {
 		for (int j = 0; j < term.cols; ++j) {
 			if (term.screen[i][j])
@@ -151,36 +153,68 @@ void redraw(void)
 		}
 	}
 }
-		   
+
+/*
+ * TODO: Scroll up and redraw when we go off the bottom of the screen.
+ *       Currently we just segfault.
+ */
+
 void insert_char(char c)
 {
 	xdraw_char(c, term.xcur, term.ycur);
 	term.screen[term.ycur][term.xcur++] = c;
 	
-	if (term.xcur == term.cols) {
-		++term.ycur;
-		term.xcur = 0;
-	}
+	if (term.xcur == term.cols)
+		newline();
 }
 
 void delete_char(void)
 {
 	if (term.xcur == 0) {
 		--term.ycur;
-		term.xcur = term.cols;
+		term.xcur = term.cols - 1;
 	}
 	term.screen[term.ycur][--term.xcur] = 0;
 	xdelete_char(term.xcur, term.ycur);
 }
 
+void erase_in_line(int n)
+{
+	int x = term.xcur;
+	int y = term.ycur;
+	
+	switch(n) {
+	case 0 :
+		term.xcur = term.cols - 1;
+		while (term.xcur >= x)
+			delete_char();
+		break;
+	case 1 :
+		while (term.xcur >= 0)
+			delete_char();
+		term.xcur = x;
+		break;
+	case 2 :
+		term.xcur = term.cols - 1;
+		while (term.xcur >= 0)
+			delete_char();
+		term.xcur = x;
+		break;
+	}
+}
+
 void newline(void)
 {
+	if (term.ycur == term.rows - 1)
+		scrolldown(1);
 	++term.ycur;
 	term.xcur = 0;
 }
 
 void linefeed(void)
 {
+	if (term.ycur == term.rows -1)
+		scrolldown(1);
 	++term.ycur;
 }
 
@@ -191,13 +225,8 @@ void carreturn(void)
 
 void backspace(void)
 {
-	if (term.xcur == 0) {
-		term.xcur = term.cols - 1;
-		--term.ycur;
-	}
-	else {
+	if (term.xcur != 0)
 		--term.xcur;
-	}
 }
 
 void moveto(int x, int y)
@@ -215,12 +244,28 @@ void moveto(int x, int y)
 
 void htab(void)
 {
-	while(term.xcur < term.cols && !term.tabs[term.xcur])
+	while (term.xcur < term.cols - 1 && !term.tabs[term.xcur])
 		++term.xcur;
-
-	if (term.xcur == term.cols) {
-		term.xcur = 0;
-		++term.ycur;
-	}
 }
 
+/*
+ * Scroll down, keeping the cursor on screen.
+ * No scrollback buffer, so can only scroll in one direction.
+ */
+void scrolldown(int n)
+{
+	// check we have room
+	int shift = n > term.ycur ? term.ycur : n;
+
+	for (int i = 0; i < shift; ++i)
+		free(term.screen[i]);
+
+	memmove(term.screen, term.screen + shift, (term.rows - shift) * sizeof(*term.screen));
+
+	for (int i = term.rows - shift; i < term.rows; ++i)
+		term.screen[i] = calloc_test(term.cols, sizeof(*term.screen[i]));
+
+	term.ycur -= shift;
+	// TODO: delay redraw
+	redraw();
+}
