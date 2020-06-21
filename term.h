@@ -5,7 +5,7 @@ typedef char glyph_t;
 
 /* memory handling */
 void term_resize(int, int);
-void term_free();
+void term_free(void);
 
 /* basic editing */
 void insert_char(char);
