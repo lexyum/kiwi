@@ -12,7 +12,7 @@
 #include "pty.h"
 #include "term.h"
 
-const char program_name[] = "temu";
+const char program_name[] = "kiwi";
 const char fontname[] = "fixed";
 
 /* initial terminal dimensions */

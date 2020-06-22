@@ -1,11 +1,11 @@
 #!/usr/bin/make -f
 #
-# Makefile for temu - simple terminal emulator
+# Makefile for kiwi - simple terminal emulator
 
 SHELL = /bin/sh
 
 ### Configuration ###
-TARGET = temu
+TARGET = kiwi
 
 CC = gcc
 
