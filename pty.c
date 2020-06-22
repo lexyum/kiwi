@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 #include <poll.h>
 
 #include "term.h"
@@ -135,6 +136,17 @@ void pty_write(char *buf, size_t count)
 				pty_read();
 		}
 	}
+}
+
+void pty_resize(unsigned short rows,
+		unsigned short cols,
+		unsigned short xpixels,
+		unsigned short ypixels)
+{
+	struct winsize wsize = { rows, cols, xpixels, ypixels };
+
+	if (ioctl(pty_fd, TIOCSWINSZ, &wsize) == -1)
+		perror("could not set window size");
 }
 
 static void child_proc(char *cmd, char *argv[])

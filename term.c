@@ -178,31 +178,6 @@ void delete_char(void)
 	xdelete_char(term.xcur, term.ycur);
 }
 
-void erase_in_line(int n)
-{
-	int x = term.xcur;
-	int y = term.ycur;
-	
-	switch(n) {
-	case 0 :
-		term.xcur = term.cols - 1;
-		while (term.xcur >= x)
-			delete_char();
-		break;
-	case 1 :
-		while (term.xcur >= 0)
-			delete_char();
-		term.xcur = x;
-		break;
-	case 2 :
-		term.xcur = term.cols - 1;
-		while (term.xcur >= 0)
-			delete_char();
-		term.xcur = x;
-		break;
-	}
-}
-
 void newline(void)
 {
 	if (term.ycur == term.rows - 1)
@@ -245,7 +220,7 @@ void moveto(int x, int y)
 void htab(void)
 {
 	while (term.xcur < term.cols - 1 && !term.tabs[term.xcur])
-		++term.xcur;
+		term.screen[term.ycur][term.xcur++] = ' ';
 }
 
 /*

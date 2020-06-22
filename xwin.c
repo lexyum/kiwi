@@ -258,6 +258,8 @@ static void configure(XEvent *ev)
 	/* Don't resize if window is not mapped */
 	if (rows && cols)
 		term_resize(rows, cols);
+
+	pty_resize(rows, cols, client.width, client.height);
 }
 
 static void keypress(XEvent *ev)
