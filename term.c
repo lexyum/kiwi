@@ -7,10 +7,12 @@
 
 const int tabspaces = 8;
 
-void xclear(void);
+void xclear_region(int, int, int, int);
 void xdraw_char(char, int, int);
+void xdraw_cursor(char, int, int);
 void xdelete_char(int, int);
 
+static void redraw_region(int, int, int, int);
 /*
  * TODO: Currently we store the physical screen and alternate screen together
 n *       and update both when the window size changes. Maybe better to 
@@ -28,15 +30,6 @@ static struct {
 } term;
 
 /* Return-tested dynamic memory allocation. Use library prototypes */
-static void *malloc_test(size_t n)
-{
-	void *tmp = malloc(n);
-	if (!tmp) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
-	return tmp;
-}
 
 static void *calloc_test(size_t nmemb, size_t n)
 {
@@ -59,7 +52,7 @@ static void *realloc_test(void *p, size_t n)
 	return p;
 }
 
-void term_resize(int rows, int cols)
+void term_resize(int cols, int rows)
 {
 	int i;
 	// shift screen to adjust cursor vertical position
@@ -141,31 +134,37 @@ void term_free(void)
 	free(term.screen);
 }
 
-void redraw(void)
+static void redraw_region(int col1, int col2, int row1, int row2)
 {
-	xclear();
-	for (int i = 0; i < term.rows; ++i) {
-		for (int j = 0; j < term.cols; ++j) {
+	xclear_region(col1, col2, row1, row2);
+	for (int i = row1; i <= row2; ++i) {
+		for (int j = col1; j <= col2; ++j) {
 			if (term.screen[i][j])
 				xdraw_char(term.screen[i][j], j, i);
 			else
 				break;
 		}
 	}
+	if (col1 <= term.xcur && term.xcur <= col2
+	    && row1 <= term.ycur && term.ycur <= row2)
+		xdraw_cursor(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 }
 
-/*
- * TODO: Scroll up and redraw when we go off the bottom of the screen.
- *       Currently we just segfault.
- */
+void redraw(void)
+{
+	redraw_region(0, term.cols - 1, 0, term.rows - 1);
+}
 
 void insert_char(char c)
 {
+	term.screen[term.ycur][term.xcur] = c;
 	xdraw_char(c, term.xcur, term.ycur);
-	term.screen[term.ycur][term.xcur++] = c;
 	
-	if (term.xcur == term.cols)
+	if (++term.xcur == term.cols)
 		newline();
+
+	term.screen[term.ycur][term.xcur] = ' ';
+	xdraw_cursor(' ', term.xcur, term.ycur);
 }
 
 void delete_char(void)
@@ -188,24 +187,35 @@ void newline(void)
 
 void linefeed(void)
 {
-	if (term.ycur == term.rows -1)
+	/* scrolldown calls redraw(), so don't clear cursor until after */
+	if (term.ycur == term.rows - 1)
 		scrolldown(1);
+	
+	xdraw_char(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
+	
 	++term.ycur;
+	term.screen[term.ycur][term.xcur] = ' ';
+	xdraw_cursor(' ', term.xcur, term.ycur);
 }
 
 void carreturn(void)
 {
+	xdraw_char(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 	term.xcur = 0;
+	xdraw_cursor(term.screen[term.ycur][0], 0, term.ycur);
 }
 
 void backspace(void)
 {
+	xdraw_char(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 	if (term.xcur != 0)
 		--term.xcur;
+	xdraw_cursor(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 }
 
 void moveto(int x, int y)
 {
+	xdraw_char(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 	if (x >= term.cols)
 		term.xcur = term.cols - 1;
 	else
@@ -215,12 +225,15 @@ void moveto(int x, int y)
 		term.ycur = term.rows - 1;
 	else
 		term.ycur = y;
+	xdraw_cursor(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 }
 
 void htab(void)
 {
+	xdraw_char(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 	while (term.xcur < term.cols - 1 && !term.tabs[term.xcur])
 		term.screen[term.ycur][term.xcur++] = ' ';
+	xdraw_cursor(term.screen[term.ycur][term.xcur], term.xcur, term.ycur);
 }
 
 /*
@@ -229,8 +242,13 @@ void htab(void)
  */
 void scrolldown(int n)
 {
+	int shift;
+
 	// check we have room
-	int shift = n > term.ycur ? term.ycur : n;
+	if (n > term.ycur)
+		shift = term.ycur;
+	else
+		shift = n;
 
 	for (int i = 0; i < shift; ++i)
 		free(term.screen[i]);

@@ -133,9 +133,28 @@ void xdraw_char(char c, int col, int row)
 	y = client.font_info->max_bounds.ascent + (row * ch);
 	x = (col * cw);
 
-	XDrawString(client.display, client.win, client.gc, x, y, &c, 1);
+	XDrawImageString(client.display, client.win, client.gc, x, y, &c, 1);
 }
 
+void xdraw_cursor(char c, int col, int row)
+{
+	unsigned long gcmask;
+	XGCValues gcvalues;
+	
+	gcmask = GCForeground | GCBackground;
+	gcvalues.foreground = BlackPixel(client.display, client.screen);
+	gcvalues.background = WhitePixel(client.display, client.screen);
+
+	XChangeGC(client.display, client.gc, gcmask, &gcvalues);
+
+	xdraw_char(c, col, row);
+
+	gcvalues.foreground = WhitePixel(client.display, client.screen);
+	gcvalues.background = BlackPixel(client.display, client.screen);
+
+	XChangeGC(client.display, client.gc, gcmask, &gcvalues);
+}
+	
 void xdelete_char(int col, int row)
 {
 	int cw, ch, x1, y1;
@@ -148,6 +167,23 @@ void xdelete_char(int col, int row)
 	x1 = client.font_info->min_bounds.lbearing + col * cw;
 
 	XClearArea(client.display, client.win, x1, y1, cw, ch, False);
+}
+
+void xclear_region(int col1, int col2, int row1, int row2)
+{
+	int x, y, cw, ch;
+	unsigned int width, height;
+	
+	cw = client.font_info->max_bounds.width;
+	ch = client.font_info->max_bounds.ascent
+		+ client.font_info->max_bounds.descent;
+
+	y = row1 * ch;
+	x = client.font_info->min_bounds.lbearing + col1 * cw;
+	width = (1 + col2 - col1) * cw;
+	height = (1 + row2 - row1) * ch;
+
+	XClearArea(client.display, client.win, x, y, width, height, False);
 }
 
 int main(int argc, char *argv[])
@@ -256,10 +292,10 @@ static void configure(XEvent *ev)
 	cols = client.width/cwidth;
 
 	/* Don't resize if window is not mapped */
-	if (rows && cols)
+	if (rows && cols) {
 		term_resize(rows, cols);
-
-	pty_resize(rows, cols, client.width, client.height);
+		pty_resize(rows, cols, client.width, client.height);
+	}
 }
 
 static void keypress(XEvent *ev)
@@ -274,9 +310,4 @@ static void keypress(XEvent *ev)
 		return;
 
 	pty_write(buf, len);
-}
-
-void xclear(void)
-{
-	XClearWindow(client.display, client.win);
 }
