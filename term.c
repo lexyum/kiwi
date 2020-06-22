@@ -52,7 +52,7 @@ static void *realloc_test(void *p, size_t n)
 	return p;
 }
 
-void term_resize(int cols, int rows)
+void term_resize(int rows, int cols)
 {
 	int i;
 	// shift screen to adjust cursor vertical position
