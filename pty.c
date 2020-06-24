@@ -153,6 +153,15 @@ static void child_proc(char *cmd, char *argv[])
 {
 	char *sh = "/bin/sh";
 
+	
+	/* Limit terminal escape codes
+	 *
+	 * TODO: Not a permanent solution unless we fully emulate a VT100,
+	 *       which is not very modern. Either completely support an
+	 *       existing terminfo entry, or provide our own.
+	 */
+	setenv("TERM", "vt100", 1);
+
 	char *args[2] = {sh, NULL};
 	execvp(sh, args);
 }
